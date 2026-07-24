@@ -1,6 +1,6 @@
 # HumsiENK BLE Battery Monitor
 
-**My 48 V batteries, read straight off Bluetooth — no vendor app, no cloud account, no Raspberry Pi.** A tiny ESP32 screen for the family and the full firehose of data in Home Assistant.
+**A screen my parents can read at a glance, and every last data point for the Home Assistant obsessive (me) under the hood — straight off Bluetooth. No vendor app, no cloud account, no Raspberry Pi.**
 
 [![License: MIT](https://img.shields.io/github/license/arlak-lang/humsienk-ble-monitor)](LICENSE)
 [![Last commit](https://img.shields.io/github/last-commit/arlak-lang/humsienk-ble-monitor)](https://github.com/arlak-lang/humsienk-ble-monitor/commits/main)
@@ -25,91 +25,138 @@
 │         ╰───────╯                                │
 │   53.6 V                       2 batteries OK    │
 └────────────────────────────────────────────────┘
-       the whole point: a number, at a glance
+      the whole point: a number, at a glance
 ```
 
 ---
 
 ## Why this exists
 
-I bought a pair of perfectly good 48 V LiFePO₄ batteries. They have Bluetooth. Great — except the only way the manufacturer lets you *see* your own numbers is a phone app that wants an account, phones home, and shows one battery at a time if the stars align.
+Two very different people look at these batteries.
 
-I have enough logins. I have enough apps. I did not want a Raspberry Pi and a subscription-flavored dashboard sitting between me and a **state-of-charge percentage**.
+**My parents**, who want to glance at a screen and know *"are we good?"* — a big number, a color, done. They are never going to open an app, make an account, or care what a cell voltage is. Nor should they.
 
-So I did what tired sysadmins do at 11pm: I sniffed the protocol, wrote it down, and cut the app out of the loop entirely. Now the batteries talk to a $12 screen and to Home Assistant, on my LAN, forever, for free. The vendor app can gather dust.
+**Me**, who wants every cell voltage, every temperature, and amps trending in **Home Assistant** so I can obsess over it properly and get an alert before anything goes sideways.
 
-If you own these batteries and feel the same way about walled gardens, this is for you.
+The manufacturer's answer to both of us is the same phone app: an account, a cloud round-trip, one battery at a time, and nothing my parents will ever open twice. I have enough logins. I did not want a Raspberry Pi and a subscription-flavored dashboard sitting between me and a state-of-charge percentage.
+
+So I did what tired sysadmins do at 11pm: sniffed the protocol, wrote it down, and cut the app out of the loop. Now there's a cheap screen on the wall for the humans, and a firehose of MQTT for the nerd. Everyone's happy, nobody's logged in.
 
 ---
 
 ## What it does
 
 - **Reads the batteries directly over BLE** — SOC, pack voltage, current, power, **every cell voltage**, temperatures, capacity, cycles. No app, no cloud, no middleman.
-- **A dead-simple panel for humans** — the CYD ("Cheap Yellow Display", an ESP32 with a touchscreen) shows a big charge ring + watts + charging/discharging. Simple enough that the people who *use* the power don't need to understand any of it.
+- **A dead-simple panel for humans** — the screen shows a big charge ring + watts + charging/discharging, and nothing else. Simple enough that the people who *use* the power don't have to understand any of it.
 - **The full firehose for the nerd** — every reading is published to **Home Assistant** via MQTT auto-discovery (~34 sensors per battery). Graph it, alert on it, automate it.
-- **Genuinely standalone** — the ESP32 does the Bluetooth, the screen, *and* the MQTT. Nothing else has to be powered on. No Pi. No Solar Assistant. No PC babysitting a dongle.
+- **Genuinely standalone** — one ESP32 does the Bluetooth, the screen, *and* the MQTT. Nothing else has to be powered on. No Pi. No Solar Assistant. No PC babysitting a dongle.
 - **1, 2, or however many batteries** you have — nothing's hardcoded to a magic number.
 
 ---
 
 ## Hardware
 
-| Thing | What / why |
-|-------|------------|
-| The batteries | HumsiENK / Shenzhen Shake World 48 V (51.2 V, 16S) LiFePO₄ with the HopeRF BLE module. Identified by BLE name = serial = the QR sticker. |
-| The screen | **CYD** — ESP32-2432S028R, ~$10–15, 320×240 ILI9341 + touch. Has WiFi *and* BLE, which is the whole trick. |
-| A computer (optional) | Only to flash the CYD and/or run the Python tools. After that, unplug it — the ESP32 is the whole system. |
+### The batteries
+
+HumsiENK / Shenzhen Shake World **48 V 100 Ah "Golf Cart" Bluetooth LiFePO₄** — the metal-cased "IronGuard / Smart Edition". The numbers that matter:
+
+| Spec | Value |
+|------|-------|
+| Nominal | **51.2 V · 100 Ah · 5.12 kWh** (16S LiFePO₄) |
+| BMS | **200 A**, with over/under-voltage, over-current, high/low-temp, and short-circuit protection |
+| Cycle life | **6000 cycles @ 80% DoD**, ≤ 3%/month self-discharge |
+| Charge | 57.6 V CC/CV, 20 A recommended (100 A max), 0–45 °C |
+| Discharge | 40 V cutoff, 50 A recommended (200 A max), −20–65 °C |
+| Build | Metal shell, **IP65**, ~90 lb (41 kg), M8 terminals, 593 × 266 × 217 mm |
+| The important bit | it has a **BLE module** (HopeRF) — identified by BLE name = serial number = the QR sticker |
+
+Full datasheet at [humsienk.com](https://www.humsienk.com). (Values are typical, per the manufacturer.)
+
+### The screen
+
+I used the **ELEGOO 2-Pack ESP32 2.8" Touch Screen Display** — [Amazon B0FJQ6RK39](https://www.amazon.com/dp/B0FJQ6RK39) — which comes with a little acrylic stand. It's a "**CYD**" (Cheap Yellow Display): an ESP32-2432S028R with a 320 × 240 ILI9341 touchscreen, ~$10–15 each. The trick is that it has **both WiFi *and* BLE**, so a single board does the Bluetooth reading, the display, and the MQTT publishing. Any equivalent CYD should work.
+
+### A computer (optional)
+
+Only needed to flash the screen and/or run the Python tools. After that, unplug it — the ESP32 is the entire system and runs off any USB power.
 
 ---
 
-## Quick start
+## Getting started
 
-**Just read a battery from a laptop** (sanity check before flashing anything):
+You don't need to be an embedded dev. Here's the whole thing, in order.
+
+### What you'll need
+
+- One or more of the batteries, powered on and in Bluetooth range.
+- A CYD screen (link above) and a USB-C cable.
+- A computer with **Python 3** — just for setup.
+- *(For Home Assistant)* an MQTT broker — the Mosquitto add-on is easiest.
+
+### 1 · Prove it works from your laptop first
+
+Before flashing anything, make sure your computer can actually see a battery:
 
 ```bash
-cd python
+git clone https://github.com/arlak-lang/humsienk-ble-monitor.git
+cd humsienk-ble-monitor/python
 python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
-python3 test_watt.py                                # unit tests, no hardware needed
-./.venv/bin/python watt_read.py HS --name           # match your battery by name prefix
+python3 test_watt.py                        # sanity check — unit tests, no hardware needed
+./.venv/bin/python watt_read.py HS --name   # reads the first battery whose name starts "HS"
 ```
 
-**Flash the standalone monitor:**
+You should get voltage, SOC, and all 16 cell voltages printed out. If you do, the hard part is over.
+**Gotcha:** these batteries only talk to one thing at a time — if the vendor app is connected on your
+phone, the battery goes invisible to everything else. Fully close it first.
 
-```bash
-cd cyd_monitor
-cp src/config.example.h src/config.h                # WiFi + MQTT (see MQTT_SETUP.md)
-pio run -t upload                                    # PlatformIO; board = esp32dev
-```
+### 2 · Flash the screen
 
-**Feed Home Assistant** — point it at your Mosquitto broker in `config.h`, create the login from
-[`MQTT_SETUP.md`](cyd_monitor/MQTT_SETUP.md), and the batteries auto-appear as devices. Or run the
-laptop bridge instead:
+1. Find each battery's **name** — it's the serial on the QR sticker (starts with `HS…`).
+2. Copy the config template and fill it in:
+   ```bash
+   cd ../cyd_monitor
+   cp src/config.example.h src/config.h
+   ```
+   Edit `src/config.h`: your WiFi SSID/password, your MQTT broker + login, and list each battery's
+   name in the `BATTERIES[]` array.
+3. Install PlatformIO, plug the CYD into USB, and flash:
+   ```bash
+   pip install platformio
+   pio run -t upload
+   ```
+4. The screen boots, finds the batteries, and draws the ring. Unplug it from the computer — it now
+   runs standalone on any USB charger.
 
-```bash
-cd python && cp config.example.yaml config.yaml
-./.venv/bin/python mqtt_bridge.py --dry-run --once   # prints what it would publish, no broker needed
-```
+### 3 · Wire it into Home Assistant
+
+1. Install the **Mosquitto broker** add-on and add the login you put in `config.h`
+   (step-by-step in [`cyd_monitor/MQTT_SETUP.md`](cyd_monitor/MQTT_SETUP.md)).
+2. Make sure HA's **MQTT integration** is enabled.
+3. Done — the batteries show up as devices with ~34 sensors each. No YAML, no restart.
+
+**Don't want to flash anything?** The `python/mqtt_bridge.py` does the exact same HA publishing from a
+computer that stays on — handy for testing, or if you don't have a screen yet.
 
 ### More than two batteries?
 
-Nothing's fixed at two. Firmware: list them in the `BATTERIES[]` array in `config.h` (for 4+, bump
+Nothing's fixed at two. Firmware: list them in `BATTERIES[]` in `config.h` (for **4+**, bump
 `CONFIG_BT_NIMBLE_MAX_CONNECTIONS` in `platformio.ini`). Bridge: list them under `batteries:` in
-`config.yaml`. CLI: `watt_dual.py <name1> <name2> ...` takes as many as you throw at it.
+`config.yaml`. CLI: `watt_dual.py <name1> <name2> ...` takes as many as you give it.
 
 ---
 
 ## How it actually talks
 
 The batteries speak a Tuya/Modbus-flavored dialect I've been calling **WATT/HiLink**. The one thing
-that unlocks it: after connecting, write the ASCII bytes **`HiLink`** to characteristic `fffa`.
-Then it's polite:
+that unlocks it: after connecting, write the ASCII bytes **`HiLink`** to characteristic `fffa`. Then
+it's polite:
 
 - Service `fff0`, notify `fff1`, write `fff2`, auth `fffa`
 - Frames: `7E 00 01 03 <addr:u16> <count:u16> <crc16-modbus> 0D`
 - Read data-point **140 (`0x8C`)** → cell count, cell voltages, temps, current, voltage, capacities, cycles, SOC
 
-The whole map (and the two evenings of wrong turns it took to find it) is in
-[`FINDINGS.md`](FINDINGS.md). The intent, architecture, and roadmap live in
+The full map (and the two evenings of wrong turns it took to find it) is in
+[`FINDINGS.md`](FINDINGS.md); the intent, architecture, and roadmap are in
 [`PROJECT_SCOPE.md`](PROJECT_SCOPE.md).
 
 ---
@@ -128,21 +175,21 @@ The whole map (and the two evenings of wrong turns it took to find it) is in
 ## Disclaimer / the boring-but-important part
 
 Not affiliated with, endorsed by, or blessed by HumsiENK / Shenzhen Shake World. The protocol was
-worked out from a battery **I own**, purely so it would interoperate with **my** house — which is
-what reverse-engineering for interoperability is *for*. This repo ships **no** vendor app, firmware,
-or decompiled code: just an independent description and a clean implementation.
+worked out from a battery **I own**, purely so it would interoperate with **my** house — which is what
+reverse-engineering for interoperability is *for*. This repo ships **no** vendor app, firmware, or
+decompiled code: just an independent description and a clean implementation.
 
-It **only ever reads** — it never writes settings, toggles FETs, or otherwise pokes your BMS.
-LiFePO₄ packs store a frightening amount of energy; you are the adult in the room. **No warranty.**
-If the vendor has concerns, open an issue and I'll be reasonable.
+It **only ever reads** — it never writes settings, toggles FETs, or otherwise pokes your BMS. LiFePO₄
+packs store a frightening amount of energy; you are the adult in the room. **No warranty.** If the
+vendor has concerns, open an issue and I'll be reasonable.
 
 ---
 
 ## Credits
 
 Built on the shoulders of people who also refuse to accept closed ecosystems:
-[`aiobmsble`](https://github.com/patman15/aiobmsble) (the sibling *BMC* protocol — a red herring for
-my units, but it lit the path), [NimBLE-Arduino](https://github.com/h2zero/NimBLE-Arduino),
+[`aiobmsble`](https://github.com/patman15/aiobmsble) (the sibling *BMC* protocol — a red herring for my
+units, but it lit the path), [NimBLE-Arduino](https://github.com/h2zero/NimBLE-Arduino),
 [LovyanGFX](https://github.com/lovyan03/LovyanGFX), and the whole CYD tinkering community.
 
 ## License
@@ -151,5 +198,5 @@ my units, but it lit the path), [NimBLE-Arduino](https://github.com/h2zero/NimBL
 
 ## Author
 
-**arlak-lang** — a tired IT guy who would rather spend a weekend reading someone else's BLE stack
-than open one more phone app. [GitHub](https://github.com/arlak-lang)
+**arlak-lang** — a tired IT guy who would rather spend a weekend reading someone else's BLE stack than
+open one more phone app. [GitHub](https://github.com/arlak-lang)
