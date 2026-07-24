@@ -15,18 +15,10 @@
 [![Apps required](https://img.shields.io/badge/apps_required-0-brightgreen)](#)
 [![Made with](https://img.shields.io/badge/made_with-spite_%26_solder-red)](#)
 
-```text
-┌────────────────────────────────────────────────┐
-│         ╭───────╮                 CHARGING ▲     │
-│       ╭─┤       ├─╮                              │
-│       │ │ 100 % │ │                 512          │
-│       │ │       │ │                WATTS         │
-│       ╰─┤       ├─╯                              │
-│         ╰───────╯                                │
-│   53.6 V                       2 batteries OK    │
-└────────────────────────────────────────────────┘
-      the whole point: a number, at a glance
-```
+<p align="center">
+  <img src="docs/panel.png" alt="The panel: a big charge ring, watts, and charge status" width="560">
+  <br><em>the whole point: a number, at a glance</em>
+</p>
 
 ---
 
