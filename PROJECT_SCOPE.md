@@ -40,7 +40,7 @@ The guiding principle: **the display stays dumb-simple; Home Assistant gets ever
 |---|------|--------|
 | 1 | Read battery SOC/V/I/temp/cells over BLE **without the phone app** | ✅ Done |
 | 2 | Standalone **parent-friendly CYD display** (no laptop needed) | ✅ Done |
-| 3 | Publish **full detail to Home Assistant** via MQTT discovery | ✅ Done (pending broker) |
+| 3 | Publish **full detail to Home Assistant** via MQTT discovery | ✅ Done |
 | 4 | Eliminate **Solar Assistant + Raspberry Pi** for battery data | ✅ Achieved for batteries |
 | 5 | Read the **ANENJI inverter directly** (solar/load/energy) | 🔜 Future |
 | 6 | Wire the inverter to the batteries (power + BMS comms) | 🔜 Future |
@@ -82,7 +82,7 @@ match the **WATT** device type.
   `REPLY 7E ver addr func <startAddr:u16> <len:u16> <payload> <crc16> 0D`
 - **Real-time data = read data-point 140 (`0x8C`).** Payload: cellCount(u8), cells(u16/1000 V),
   tempCount(u8), mos/pcb temp `(u16-2730)/10 °C`, cell temps, current(14-bit mag, bit15 sign,
-  bit14 ÷10), voltage(u16/100 V), remain/total/design capacity(u16/10 Ah), cycles(u16), SOC(u16).
+  bit14 ÷10), voltage(u16/100 V), remain/total/design capacity(u16 whole Ah), cycles(u16), SOC(u16).
 
 ### Behavioural gotchas (all handled, but document them)
 - **Sparse advertising:** batteries advertise only in brief bursts; when **connected they stop
@@ -93,8 +93,7 @@ match the **WATT** device type.
   numbers we'd use the inverter (future).
 - **Current sign:** validated — BMS **negative = discharging** (panel shows DISCHARGING
   correctly under real load). Opposite raw sign from the inverter, but the displayed state is right.
-- **Capacity scaling — TO VERIFY:** raw reads 100 → app's `/10` = 10.0 Ah on a 100 Ah battery.
-  Confirm the divider against the app before trusting capacity in HA.
+- **Capacity:** whole Ah — raw 100 = 100 Ah (the vendor app's `/10` giving 10.0 Ah is wrong for these packs). Fixed in the decoders.
 
 ## 6. Firmware (CYD) design
 
@@ -114,14 +113,13 @@ match the **WATT** device type.
 
 - CYD WiFi + broker: set in `config.h`. Broker is HA Mosquitto at **`homeassistant.local:1883`**,
   user **`humsienk_cyd`** (see `cyd_monitor/MQTT_SETUP.md`).
-- **Pending (HA side):** install + start the **Mosquitto broker add-on** and add the
-  `humsienk_cyd` login — port 1883 was refusing connections (broker not running). The CYD
-  auto-reconnects once it's up; no re-flash needed.
+- **HA side (live):** Mosquitto broker running with the `humsienk_cyd` login; both batteries
+  publish and auto-appear in HA (~34 sensors each).
 
 ## 8. Open items & future work
 
-- [ ] Stand up the **Mosquitto broker** on HA (blocks the HA data flow).
-- [ ] **Verify the capacity divider** (`/10`?) against the app.
+- [x] **Mosquitto broker** up + `humsienk_cyd` login — both batteries live in HA. ✅
+- [x] Capacity fixed to whole Ah (100 Ah, not 10). ✅
 - [ ] **Charge/discharge FET state** in HA — decode the WATT `DP_WARNING_INFO` status registers
       (`handleWarningInfoResponse` in the decompiled `WattBleProtocolRepository`).
 - [ ] Touchscreen **"Release BLE for 60 s"** button so the app can connect without unplugging.
