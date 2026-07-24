@@ -1,23 +1,29 @@
 #!/usr/bin/env python3
 """
-ANENJI ANJ-12000W-LVP-WIFI inverter → MQTT / Home Assistant.  ⚠️ SCAFFOLD / WIP.
+ANENJI ANJ-12000W-LVP-WIFI inverter → MQTT / Home Assistant.  ⚠️ WIP.
 
 Goal (same ethos as the battery side): read the inverter LOCALLY over its serial
-port — solar production, load, grid, battery flow — and publish to Home Assistant,
-so the Energy dashboard has real numbers and nothing touches the vendor cloud.
+port — solar, load, grid, battery flow — and publish to Home Assistant, so the
+Energy dashboard has real numbers and nothing touches the vendor cloud.
 
-STATUS: the exact protocol isn't confirmed yet. These OEM 48 V hybrids are usually
-**Voltronic** (ASCII `QPIGS` commands over RS232/USB, often 2400 baud) — that's what
-this scaffolds. Some units are **Modbus RTU** instead. Run `--probe` FIRST to find out:
+CONFIRMED by probing (see `--probe`):
+    • Protocol : Modbus RTU   (NOT Voltronic ASCII)
+    • Serial   : 9600 baud, 8N1, on the inverter's RS485/USB cable (usually ttyUSB1)
+    • Slave id : 1
+    • Function : 3 (read holding registers)
+    • Register 40000 (0x9C40) responds; a proper data block hasn't been mapped yet.
 
-    ./.venv/bin/python anenji_bridge.py --probe --port /dev/ttyUSB1
-
-If QPI/QPIGS return a sane "(...)" reply → it's Voltronic, fill in the field map below.
-If they return silence/garbage → it's likely Modbus; see the TODO at the bottom.
+TODO — the register MAP. Which registers hold PV voltage/power, load, battery
+voltage/current, SOC, grid, etc. is model-specific and still unknown. Options:
+    1. `--scan A B` to walk the address space and log responders (patient; the
+       device is silent on invalid regs, so use a short timeout).
+    2. Find the published SmartESS / ANENJI Modbus map for this model.
+Once mapped, fill in REGISTERS below and finish publish().
 
 Deps:  pip install pyserial paho-mqtt
 """
 import argparse
+import struct
 import sys
 import time
 
@@ -26,120 +32,103 @@ try:
 except ImportError:
     serial = None
 
-# ── config ───────────────────────────────────────────────────────────────────
-SERIAL_PORT = "/dev/ttyUSB1"      # the inverter's USB cable (CYD is usually ttyUSB0)
-BAUD = 2400                       # Voltronic default; some units use 9600 — probe both
+# ── config (confirmed) ───────────────────────────────────────────────────────
+SERIAL_PORT = "/dev/ttyUSB1"
+BAUD = 9600
+SLAVE = 1
 MQTT_HOST = "homeassistant.local"
 MQTT_PORT = 1883
-MQTT_USER = "humsienk_cyd"        # reuse the same broker login, or make a new one
-MQTT_PASSWORD = ""                # fill in
+MQTT_USER = "humsienk_cyd"
+MQTT_PASSWORD = ""
 MQTT_BASE = "anenji"
 POLL_INTERVAL = 5
 
+# ── register map — TO BE DISCOVERED. name: (address, scale, unit, device_class) ─
+REGISTERS: dict[str, tuple[int, float, str, str]] = {
+    # "pv_power":        (0x????, 1,    "W",  "power"),
+    # "load_power":      (0x????, 1,    "W",  "power"),
+    # "battery_voltage": (0x????, 0.1,  "V",  "voltage"),
+    # "battery_soc":     (0x????, 1,    "%",  "battery"),
+    # "grid_voltage":    (0x????, 0.1,  "V",  "voltage"),
+}
 
-# ── Voltronic framing (CRC-16/XMODEM with the usual byte fix-ups) ─────────────
-def crc16_xmodem(data: bytes) -> int:
-    crc = 0
-    for b in data:
-        crc ^= b << 8
+
+# ── Modbus RTU ───────────────────────────────────────────────────────────────
+def crc16_modbus(d: bytes) -> int:
+    c = 0xFFFF
+    for b in d:
+        c ^= b
         for _ in range(8):
-            crc = ((crc << 1) ^ 0x1021) & 0xFFFF if (crc & 0x8000) else (crc << 1) & 0xFFFF
-    return crc
+            c = (c >> 1) ^ 0xA001 if c & 1 else c >> 1
+    return c
 
 
-def frame(cmd: str) -> bytes:
-    body = cmd.encode()
-    crc = crc16_xmodem(body)
-    out = bytearray(body)
-    for byte in (crc >> 8, crc & 0xFF):
-        out.append(byte + 1 if byte in (0x28, 0x0D, 0x0A) else byte)  # Voltronic quirk
-    out.append(0x0D)
-    return bytes(out)
-
-
-def query(ser, cmd: str, timeout: float = 2.0) -> bytes:
+def read_registers(ser, addr: int, count: int = 1, slave: int = SLAVE):
+    """Return list[int] of register values, or None on exception/timeout."""
+    req = bytes([slave, 3]) + struct.pack(">HH", addr, count)
     ser.reset_input_buffer()
-    ser.write(frame(cmd))
-    end = time.time() + timeout
-    buf = bytearray()
-    while time.time() < end:
-        chunk = ser.read(64)
-        if chunk:
-            buf += chunk
-            if buf.endswith(b"\r"):
-                break
-    return bytes(buf)
+    ser.write(req + struct.pack("<H", crc16_modbus(req)))
+    time.sleep(0.15 + count * 0.002)
+    r = ser.read(5 + 2 * count + 4)
+    if len(r) < 5 or r[1] != 3:          # 0x83 = exception, or no reply
+        return None
+    n = r[2] // 2
+    return [int.from_bytes(r[3 + 2 * i:5 + 2 * i], "big") for i in range(n)]
 
 
-# QPIGS field order (standard Voltronic). VERIFY against your unit's --probe output;
-# split-phase 12 kW units often add fields / a second QPIGS2 for the 2nd phase.
-QPIGS_FIELDS = [
-    ("grid_voltage", "V"), ("grid_freq", "Hz"),
-    ("ac_out_voltage", "V"), ("ac_out_freq", "Hz"),
-    ("ac_out_va", "VA"), ("load_power", "W"), ("load_pct", "%"),
-    ("bus_voltage", "V"), ("battery_voltage", "V"), ("battery_charge_current", "A"),
-    ("battery_soc", "%"), ("inverter_temp", "°C"),
-    ("pv_input_current", "A"), ("pv_input_voltage", "V"),
-    ("scc_battery_voltage", "V"), ("battery_discharge_current", "A"),
-    # ... status flags + newer fields (pv_power, etc.) follow — extend after probing
-]
+def open_serial(port, baud):
+    if serial is None:
+        sys.exit("pyserial not installed — run: pip install pyserial")
+    return serial.Serial(port, baud, timeout=0.6)
 
 
-def parse_qpigs(resp: bytes) -> dict:
-    s = resp.decode(errors="ignore").strip()
-    if not s.startswith("("):
-        return {}
-    parts = s[1:].split(" ")
-    out = {}
-    for (name, _unit), val in zip(QPIGS_FIELDS, parts):
-        try:
-            out[name] = float(val)
-        except ValueError:
-            out[name] = val
-    # solar power isn't always a direct field — derive if needed:
-    if "pv_input_voltage" in out and "pv_input_current" in out:
-        out["pv_power"] = round(out["pv_input_voltage"] * out["pv_input_current"], 1)
-    return out
-
-
-# ── probe mode: identify the protocol ─────────────────────────────────────────
+# ── probe / scan (how the protocol above was found) ──────────────────────────
 def probe(port, baud):
-    if serial is None:
-        sys.exit("pyserial not installed — run: pip install pyserial")
-    print(f"Probing {port} @ {baud} baud ...")
-    with serial.Serial(port, baud, timeout=1) as ser:
-        for cmd in ("QPI", "QID", "QMOD", "QPIGS", "QPIGS2", "QPGS0"):
-            r = query(ser, cmd)
-            print(f"  {cmd:8s} -> {r!r}")
-    print("\nSane '(...)' replies = Voltronic (fill in QPIGS_FIELDS from QPIGS output).")
-    print("Silence/garbage = probably Modbus RTU — see the TODO in this file.")
+    with open_serial(port, baud) as ser:
+        print(f"Modbus probe {port} @ {baud}, slave {SLAVE}:")
+        for a in (0, 1, 100, 0x9C40, 0x9C41):
+            r = read_registers(ser, a)
+            print(f"  reg {a} (0x{a:04x}) -> {r}")
 
 
-# ── normal mode: read + publish (publishing is a TODO stub) ───────────────────
+def scan(port, baud, start, end):
+    with open_serial(port, baud) as ser:
+        ser.timeout = 0.25
+        hits = 0
+        for a in range(start, end):
+            r = read_registers(ser, a)
+            if r is not None:
+                print(f"  {a} (0x{a:04x}) = {r[0]}")
+                hits += 1
+        print(f"{hits} responders in [{start}, {end})")
+
+
+# ── normal mode (publish) — finish once REGISTERS is filled in ───────────────
 def run():
-    if serial is None:
-        sys.exit("pyserial not installed — run: pip install pyserial")
-    # TODO: connect MQTT (mirror mqtt_bridge.py: HA discovery for pv_power,
-    #       load_power, battery_voltage, battery_soc, grid_voltage, etc.), then loop:
-    with serial.Serial(SERIAL_PORT, BAUD, timeout=1) as ser:
+    if not REGISTERS:
+        sys.exit("REGISTERS is empty — map them first (see the TODO / --scan).")
+    with open_serial(SERIAL_PORT, BAUD) as ser:
         while True:
-            data = parse_qpigs(query(ser, "QPIGS"))
-            print(data)  # TODO: publish to MQTT_BASE/state + HA discovery
+            reading = {}
+            for name, (addr, scale, _unit, _dc) in REGISTERS.items():
+                v = read_registers(ser, addr)
+                if v is not None:
+                    reading[name] = round(v[0] * scale, 2)
+            print(reading)   # TODO: publish to MQTT + HA discovery (mirror mqtt_bridge.py)
             time.sleep(POLL_INTERVAL)
 
 
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser(description="ANENJI inverter → MQTT (WIP scaffold)")
-    ap.add_argument("--probe", action="store_true", help="identify the protocol and quit")
+    ap = argparse.ArgumentParser(description="ANENJI inverter (Modbus RTU) → MQTT (WIP)")
+    ap.add_argument("--probe", action="store_true", help="confirm Modbus responds")
+    ap.add_argument("--scan", nargs=2, type=lambda x: int(x, 0), metavar=("START", "END"),
+                    help="scan a register range for responders, e.g. --scan 0x9c40 0x9d00")
     ap.add_argument("--port", default=SERIAL_PORT)
     ap.add_argument("--baud", type=int, default=BAUD)
     args = ap.parse_args()
-    if args.probe:
+    if args.scan:
+        scan(args.port, args.baud, args.scan[0], args.scan[1])
+    elif args.probe:
         probe(args.port, args.baud)
     else:
         run()
-
-# ── TODO if it's Modbus RTU instead of Voltronic ──────────────────────────────
-# - swap query()/frame() for minimalmodbus or pymodbus (RTU), find the slave id +
-#   baud, and read the input registers for PV / load / battery / grid.
-# - the register map is model-specific; capture it and add a parse_modbus().

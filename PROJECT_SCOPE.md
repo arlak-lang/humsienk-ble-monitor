@@ -125,7 +125,7 @@ match the **WATT** device type.
 - [ ] **Charge/discharge FET state** in HA — decode the WATT `DP_WARNING_INFO` status registers
       (`handleWarningInfoResponse` in the decompiled `WattBleProtocolRepository`).
 - [ ] Touchscreen **"Release BLE for 60 s"** button so the app can connect without unplugging.
-- [ ] **ANENJI inverter integration** — read Modbus (USB now, WiFi later) for SOLAR / LOAD /
+- [ ] **ANENJI inverter integration** — confirmed **Modbus RTU, 9600, slave 1** (see python/anenji_bridge.py); map the registers, then read SOLAR / LOAD /
       TODAY kWh, replacing Solar Assistant's role. Add those to the display/HA.
 - [ ] **Wired CAN/RS485 option** — the battery port is currently free; a transceiver
       (SN65HVD230 for CAN / MAX485 for RS485) would let the CYD read wired, sidestepping the
