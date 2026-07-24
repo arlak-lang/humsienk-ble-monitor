@@ -32,10 +32,18 @@ If you'd rather not create a user right now, set both `MQTT_USER` and
 (`customize: active: true` + an ACL, or the add-on's anonymous option). Not
 recommended for anything long-term.
 
-## ⚠️ Network reachability
+## ⚠️ Network reachability (worth reading)
 
-The CYD needs to reach the broker over WiFi. If you put IoT devices on a **separate / guest /
-VLAN network**, make sure that network can actually **route to the broker**
-(`homeassistant.local:1883`) — isolated IoT VLANs often can't, and MQTT will silently fail while
-the screen and BLE keep working. The serial log shows `[mqtt] connecting…` but never connects if
-it's blocked; put the CYD on a network that can reach the broker.
+The CYD has to reach the broker over WiFi, and the **ESP32 is 2.4 GHz only**. Two things trip
+people up:
+
+- **2.4 vs 5 GHz.** Some routers — UniFi especially — won't let a device on 2.4 GHz talk to one on
+  5 GHz. If your broker / Home Assistant is only on the 5 GHz network, a 2.4 GHz-only ESP32 can't
+  reach it. The easy fix (and good practice anyway) is a **dedicated 2.4 GHz WiFi network — its own
+  SSID — for your IoT gear**.
+- **Locked-down networks.** If that IoT WiFi is walled off from the rest of your house, make sure it
+  can still **reach the broker** (`homeassistant.local:1883`). A guest/isolated WiFi often can't, and
+  MQTT then fails silently while the screen and BLE keep working.
+
+If MQTT never connects, the serial log sits on `[mqtt] connecting…`. Put the CYD on a WiFi network
+(and band) that can actually reach the broker.

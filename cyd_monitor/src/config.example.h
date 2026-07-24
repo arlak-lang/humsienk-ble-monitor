@@ -1,7 +1,7 @@
 // Template. Copy to config.h and fill in your values (config.h is gitignored).
 #pragma once
 
-// WiFi settings
+// WiFi settings (the ESP32 is 2.4 GHz only — see MQTT_SETUP.md if it won't connect)
 #define WIFI_SSID      "YOUR_SSID"
 #define WIFI_PASSWORD  "YOUR_WIFI_PASSWORD"
 
