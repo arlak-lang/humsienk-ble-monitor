@@ -1,0 +1,17 @@
+# HumsiENK BMS -> MQTT bridge config
+mqtt:
+  # TODO: confirm these. HA's Mosquitto add-on likely lives at the HA VM (.249).
+  host: homeassistant.local
+  port: 1883
+  username: ""          # set if your broker requires auth
+  password: ""
+  discovery_prefix: homeassistant
+  base_topic: humsienk
+
+poll_interval: 10        # seconds between polls of each battery
+
+batteries:
+  - label: LEFT
+    name: HS0000000000000000
+  - label: RIGHT
+    name: HS0000000000000001

@@ -1,0 +1,14 @@
+# Secrets — real credentials go in these (use the *.example.* templates)
+cyd_monitor/src/config.h
+python/config.yaml
+
+# Build / tool caches
+cyd_monitor/.pio/
+python/.venv/
+.venv/
+__pycache__/
+*.pyc
+
+# Runtime artifacts
+*.log
+*.jpg
