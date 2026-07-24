@@ -1,0 +1,67 @@
+# Home Assistant package — derive battery ENERGY (kWh) from the per-battery POWER
+# sensors this project publishes, so the batteries can feed the Energy dashboard.
+#
+# ── Install ──────────────────────────────────────────────────────────────────
+# 1. Enable packages once in configuration.yaml:
+#        homeassistant:
+#          packages: !include_dir_named packages
+# 2. Save this file as   config/packages/humsienk_energy.yaml
+# 3. Replace the sensor entity IDs below with YOUR battery "Power" entities
+#    (Settings → Devices & Services → your HumsiENK device → the Power sensor →
+#    gear icon shows the entity_id, e.g. sensor.humsienk_<serial>_power).
+# 4. Restart HA, then: Settings → Dashboards → Energy → Home battery storage →
+#    add "Battery Energy In" and "Battery Energy Out".
+#
+# ── Caveat ───────────────────────────────────────────────────────────────────
+# The BMS has a ~200 W deadband: small flows read 0, so this UNDERCOUNTS. For
+# accurate whole-home energy (solar / grid / load), use the inverter instead
+# (see python/anenji_bridge.py). This is the rough, battery-only version.
+
+template:
+  - sensor:
+      # Whole-bank power = sum of every battery (+ charging, − discharging).
+      # >>> EDIT these two entity IDs to match your batteries <<<
+      - name: "Battery Bank Power"
+        unique_id: humsienk_bank_power
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: >
+          {{ (states('sensor.humsienk_left_power')  | float(0))
+           + (states('sensor.humsienk_right_power') | float(0)) }}
+        availability: >
+          {{ has_value('sensor.humsienk_left_power')
+             or has_value('sensor.humsienk_right_power') }}
+
+      # Split into two always-positive streams (the Energy dashboard wants
+      # "in" and "out" as separate, monotonically-increasing meters).
+      - name: "Battery Charge Power"
+        unique_id: humsienk_charge_power
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: "{{ [ states('sensor.battery_bank_power') | float(0), 0 ] | max }}"
+
+      - name: "Battery Discharge Power"
+        unique_id: humsienk_discharge_power
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: "{{ [ 0 - (states('sensor.battery_bank_power') | float(0)), 0 ] | max }}"
+
+# Riemann-sum integration: power (W) → energy (kWh), monotonically increasing.
+sensor:
+  - platform: integration
+    source: sensor.battery_charge_power
+    name: Battery Energy In
+    unique_id: humsienk_energy_in
+    unit_prefix: k
+    round: 3
+    method: trapezoidal
+  - platform: integration
+    source: sensor.battery_discharge_power
+    name: Battery Energy Out
+    unique_id: humsienk_energy_out
+    unit_prefix: k
+    round: 3
+    method: trapezoidal

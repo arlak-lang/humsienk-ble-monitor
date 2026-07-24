@@ -43,6 +43,9 @@ def test_decode_analog():
     assert abs(r["voltage"] - 53.65) < 1e-6
     assert abs(r["current"] - 0.0) < 1e-6
     assert r["cycle_number"] == 3
+    assert r["total_capacity"] == 100.0      # whole Ah (raw 100 = 100 Ah, not 10.0)
+    assert r["design_capacity"] == 100.0
+    assert r["remaining_capacity"] == 100.0
     assert abs(r["mos_temperature"] - 26.0) < 1e-6
     assert abs(r["pcb_temperature"] - 27.0) < 1e-6
     assert len(r["cell_voltages"]) == 16

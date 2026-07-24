@@ -107,10 +107,12 @@ def decode_analog(payload: bytes, new_version: bool = False) -> dict:
         cell_temps.append((_u16(payload, i) - 2730) / 10.0); i += 2
     current = _parse_current(payload, i); i += 2
     module_voltage = _u16(payload, i) / 100.0; i += 2
-    remaining_capacity = _u16(payload, i) / 10.0; i += 2
-    total_capacity = _u16(payload, i) / 10.0; i += 2
+    # Capacities are whole Ah on these packs (the vendor app's /10 is wrong here:
+    # raw 100 = 100 Ah, not 10.0 Ah).
+    remaining_capacity = float(_u16(payload, i)); i += 2
+    total_capacity = float(_u16(payload, i)); i += 2
     cycle_number = _u16(payload, i); i += 2
-    design_capacity = _u16(payload, i) / 10.0; i += 2
+    design_capacity = float(_u16(payload, i)); i += 2
     soc = _u16(payload, i); i += 2
     out = {
         "cell_count": cell_count,

@@ -74,10 +74,11 @@ inline bool parse_analog_frame(const uint8_t* f, size_t len, Reading& r) {
   for (int c = 0; c < r.cellTempCount && c < 16; c++) { r.cellTemps[c] = (u16(p, i) - 2730) / 10.0f; i += 2; }
   r.current = parse_current(p, i); i += 2;
   r.voltage = u16(p, i) / 100.0f; i += 2;
-  r.remainingCapacity = u16(p, i) / 10.0f; i += 2;
-  r.totalCapacity = u16(p, i) / 10.0f; i += 2;
+  // Capacities are whole Ah on these packs (raw 100 = 100 Ah, not the app's 10.0).
+  r.remainingCapacity = (float)u16(p, i); i += 2;
+  r.totalCapacity = (float)u16(p, i); i += 2;
   r.cycleNumber = u16(p, i); i += 2;
-  r.designCapacity = u16(p, i) / 10.0f; i += 2;
+  r.designCapacity = (float)u16(p, i); i += 2;
   r.soc = u16(p, i); i += 2;
   r.power = r.voltage * r.current;
   if (r.cellCount > 0) {

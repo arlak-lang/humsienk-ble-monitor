@@ -71,12 +71,12 @@ Decompiled source: `jadx_out/`; clean Python impl: `watt.py` + live reader `watt
   REPLY `7E ver addr func <startAddr:u16> <len:u16> <payload> <crc16> 0D`  (head 0x7E/alt 0x1E, tail 0x0D)
 - **Real-time data:** read DP **140** (`0x8C`). Payload: cellCount u8; cells u16/1000 V;
   tempCount u8; mosTemp,pcbTemp (u16-2730)/10 C; cellTemps (u16-2730)/10; current (14-bit mag,
-  bit15=sign,bit14=÷10); voltage u16/100 V; remain/total/design capacity u16/10 Ah; cycles u16; SOC u16.
+  bit15=sign,bit14=÷10); voltage u16/100 V; remain/total/design capacity u16 (whole Ah); cycles u16; SOC u16.
 
 ### First live read (right battery HS0000000000000001)
 53.65 V, 0.00 A, SOC 100%, 16 cells ~3.353 V (Δ 0.003), MOS 26 / PCB 27 C, cell temps 24-25 C,
 cycles 3, CRC valid. Cross-check: 16 x 3.353 = 53.65 V == reported pack voltage. ✅
-- VERIFY vs app: capacity raw=100 -> /10 = 10.0 Ah, but battery is 100 Ah. Confirm the divider.
+- Capacity is whole Ah: raw 100 = 100 Ah (the vendor app's /10 giving 10.0 Ah is wrong for these packs). Fixed in the decoders.
 
 ## Remaining
 - Phase 4 DONE: `watt_dual.py` held BOTH batteries on the single built-in adapter, 6/6 reads
@@ -87,5 +87,5 @@ cycles 3, CRC valid. Cross-check: 16 x 3.353 = 53.65 V == reported pack voltage.
   host/port/user/pass in config.yaml (HA Mosquitto?), then run `./.venv/bin/python mqtt_bridge.py`.
 - Follow-ups: (a) charge/discharge FET state — not in analog DP 140; needs decoding DP_WARNING_INFO
   status registers (handleWarningInfoResponse in decompiled WattBleProtocolRepository).
-  (b) confirm capacity /10 divider vs app. (c) optional: systemd service for auto-start.
+  (b) optional: systemd service for auto-start.
 - Other DPs available in the app if wanted: warnings/protection params/FET control (30,50,70,140,146,...).
