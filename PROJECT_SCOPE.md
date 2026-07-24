@@ -26,7 +26,7 @@ The guiding principle: **the display stays dumb-simple; Home Assistant gets ever
   - Manufacturer: Shenzhen Shake World New Energy Technology Co., Ltd.
   - BLE module: **HopeRF** (`HP-BLE-1.0` / `HPZXGT01-C-V1.1`).
   - Also expose a wired **RS485 / CAN / UART** port (currently unused).
-- **Inverter/charger:** an **SRNE** unit. **Not yet wired to the batteries** — connecting it
+- **Inverter/charger:** an **ANENJI ANJ-12000W-LVP-WIFI** (12 kW split-phase hybrid; its WiFi dongle is cloud-first, so local data comes from the serial/Modbus port). **Not yet wired to the batteries** — connecting it
   (power + closed-loop BMS comms) is a project goal.
 - **Home Assistant:** runs as a systemd-supervised **QEMU VM at `homeassistant.local`** on the
   Debian laptop (bridged over `br0` on the wired NIC).
@@ -42,7 +42,7 @@ The guiding principle: **the display stays dumb-simple; Home Assistant gets ever
 | 2 | Standalone **parent-friendly CYD display** (no laptop needed) | ✅ Done |
 | 3 | Publish **full detail to Home Assistant** via MQTT discovery | ✅ Done (pending broker) |
 | 4 | Eliminate **Solar Assistant + Raspberry Pi** for battery data | ✅ Achieved for batteries |
-| 5 | Read the **SRNE inverter directly** (solar/load/energy) | 🔜 Future |
+| 5 | Read the **ANENJI inverter directly** (solar/load/energy) | 🔜 Future |
 | 6 | Wire the inverter to the batteries (power + BMS comms) | 🔜 Future |
 
 ## 4. Architecture
@@ -56,7 +56,7 @@ The guiding principle: **the display stays dumb-simple; Home Assistant gets ever
         │ RS485/CAN (future, wired)                          │ ILI9341 TFT
         │                                                    ▼
  ┌────────────┐  (future)                            "parents" glanceable panel
- │ SRNE inverter│  Modbus → solar/load/energy → HA     (big % ring, watts, status)
+ │ ANENJI inverter│  Modbus → solar/load/energy → HA     (big % ring, watts, status)
  └────────────┘
 ```
 
@@ -125,7 +125,7 @@ match the **WATT** device type.
 - [ ] **Charge/discharge FET state** in HA — decode the WATT `DP_WARNING_INFO` status registers
       (`handleWarningInfoResponse` in the decompiled `WattBleProtocolRepository`).
 - [ ] Touchscreen **"Release BLE for 60 s"** button so the app can connect without unplugging.
-- [ ] **SRNE inverter integration** — read Modbus (USB now, WiFi later) for SOLAR / LOAD /
+- [ ] **ANENJI inverter integration** — read Modbus (USB now, WiFi later) for SOLAR / LOAD /
       TODAY kWh, replacing Solar Assistant's role. Add those to the display/HA.
 - [ ] **Wired CAN/RS485 option** — the battery port is currently free; a transceiver
       (SN65HVD230 for CAN / MAX485 for RS485) would let the CYD read wired, sidestepping the

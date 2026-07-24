@@ -73,12 +73,18 @@ def main():
     d.arc(box, 0, 360, fill=GREY, width=width)
     d.arc(box, -90, -90 + 3.6 * soc, fill=GREEN, width=width)
 
-    # SOC number + small % superscript, centred in the ring hole
+    # SOC number + small "%" superscript. Centre the WHOLE GROUP in the ring hole
+    # (like the firmware) so neither the number nor the % touches the green ring.
     num = str(soc)
-    dh = 46 * S
-    nx = cx - 6 * S
-    w = draw_number(d, num, nx, cy, dh, WHITE)
-    d.text((nx + w / 2 + 8 * S, cy - dh / 2 + 4 * S), "%", font=f(20 * S),
+    dh = 42 * S
+    dw, gap = int(dh * 0.60), int(dh * 0.12)
+    num_w = len(num) * dw + (len(num) - 1) * gap
+    pf = f(18 * S)
+    pct_w = d.textlength("%", font=pf)
+    group_w = num_w + 6 * S + pct_w
+    num_cx = cx - group_w / 2 + num_w / 2          # number's centre, group centred on cx
+    draw_number(d, num, num_cx, cy, dh, WHITE)
+    d.text((num_cx + num_w / 2 + 6 * S, cy - dh / 2 + 6 * S), "%", font=pf,
            fill=WHITE, anchor="lm")
 
     # Right column: status + big watts + label (matches the firmware exactly)
