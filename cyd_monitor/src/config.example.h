@@ -1,7 +1,7 @@
 // Template. Copy to config.h and fill in your values (config.h is gitignored).
 #pragma once
 
-// WiFi — CYD uses the IoT SSID
+// WiFi settings
 #define WIFI_SSID      "YOUR_SSID"
 #define WIFI_PASSWORD  "YOUR_WIFI_PASSWORD"
 
