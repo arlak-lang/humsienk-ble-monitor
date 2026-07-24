@@ -32,11 +32,10 @@ If you'd rather not create a user right now, set both `MQTT_USER` and
 (`customize: active: true` + an ACL, or the add-on's anonymous option). Not
 recommended for anything long-term.
 
-## ⚠️ Network reachability (IoT SSID)
+## ⚠️ Network reachability
 
-The CYD joins **`CHANGE_ME_IOT_SSID`**, but the broker is at `homeassistant.local` (main LAN /
-HA VM). If your IoT SSID is an **isolated VLAN**, the CYD won't be able to reach
-`.249` and MQTT will silently fail (the screen + BLE still work).
-Make sure the IoT network can route to `homeassistant.local:1883`, or put the CYD on a
-network that can. The serial log will show `[mqtt] connecting…` but never connect
-if it's blocked.
+The CYD needs to reach the broker over WiFi. If you put IoT devices on a **separate / guest /
+VLAN network**, make sure that network can actually **route to the broker**
+(`homeassistant.local:1883`) — isolated IoT VLANs often can't, and MQTT will silently fail while
+the screen and BLE keep working. The serial log shows `[mqtt] connecting…` but never connects if
+it's blocked; put the CYD on a network that can reach the broker.

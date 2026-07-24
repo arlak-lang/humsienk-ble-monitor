@@ -112,7 +112,7 @@ match the **WATT** device type.
 
 ## 7. Configuration / credentials
 
-- CYD WiFi SSID: **`CHANGE_ME_IOT_SSID`**. Broker: HA Mosquitto at **`homeassistant.local:1883`**,
+- CYD WiFi + broker: set in `config.h`. Broker is HA Mosquitto at **`homeassistant.local:1883`**,
   user **`humsienk_cyd`** (see `cyd_monitor/MQTT_SETUP.md`).
 - **Pending (HA side):** install + start the **Mosquitto broker add-on** and add the
   `humsienk_cyd` login — port 1883 was refusing connections (broker not running). The CYD
