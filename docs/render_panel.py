@@ -62,8 +62,9 @@ def main():
     f = lambda px: ImageFont.truetype(FONT, px)
 
     # ---- example reading (a charging pack) ----
-    soc, watts, volts, charging = 100, 512, 53.6, True
-    ncol = GREEN if charging else ORANGE
+    soc, watts, volts = 100, 512, 53.6
+    charging = watts > 20
+    discharging = watts < -20
 
     # SOC ring (grey track + coloured fill from top, clockwise)
     cx, cy = 90 * S, 118 * S
@@ -80,13 +81,19 @@ def main():
     d.text((nx + w / 2 + 8 * S, cy - dh / 2 + 4 * S), "%", font=f(20 * S),
            fill=WHITE, anchor="lm")
 
-    # Right column: status + big watts + label
+    # Right column: status + big watts + label (matches the firmware exactly)
     rx = 246 * S
-    d.text((rx, 34 * S), "CHARGING" if charging else "IDLE", font=f(15 * S),
-           fill=ncol, anchor="mm")
+    st, stcol = ("CHARGING", GREEN) if charging else \
+                ("DISCHARGING", ORANGE) if discharging else \
+                ("IDLE", (180, 180, 180))
+    d.text((rx, 34 * S), st, font=f(15 * S), fill=stcol, anchor="mm")
     tri = 12 * S
-    d.polygon([(rx - tri, 60 * S), (rx + tri, 60 * S), (rx, 46 * S)], fill=ncol)  # up arrow
-    draw_number(d, str(watts), rx, 118 * S, 44 * S, WHITE)
+    if charging:
+        d.polygon([(rx - tri, 60 * S), (rx + tri, 60 * S), (rx, 46 * S)], fill=GREEN)   # up
+    elif discharging:
+        d.polygon([(rx - tri, 46 * S), (rx + tri, 46 * S), (rx, 60 * S)], fill=ORANGE)  # down
+    # idle: no arrow
+    draw_number(d, str(abs(watts)), rx, 118 * S, 44 * S, WHITE)
     d.text((rx, 162 * S), "WATTS", font=f(16 * S), fill=WHITE, anchor="mm")
 
     # Bottom strip: voltage + battery health
